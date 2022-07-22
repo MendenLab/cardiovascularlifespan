@@ -357,6 +357,7 @@ ctrl_Mut_lifespan <- data.frame(Var1 = c("heartRate", "respiratoryRate", "bodyMa
   dplyr::mutate(Var2 = "lifespan80")
 
 
+
  ## Create barplot for all traits corrected for mutation rate
 ctrl_Mut_lifespan <- ctrl_Mut_lifespan %>% 
   dplyr::mutate(signi_star = case_when(p_value <= 0.001 ~ "***",
@@ -397,6 +398,7 @@ partial_mass_spearman <- pcor.test(log10(joint_data$adult_mass), log10(joint_dat
 
 partial_male_spearman <- pcor.test(log10(joint_data$time_to_sexual_maturity_male), log10(joint_data$lifespan80), log10(joint_data$mutation_rate), method = "spearman")
 
+
 ########### Fit a model for lifespan with mutation rate and lifespan with mutation rate and heart beat
 lm_heart_mut <- lm(log10(lifespan80) ~ log10(heart_rate) + log10(mutation_rate), data = joint_data)
 lm_heart_mut
@@ -420,15 +422,17 @@ text(s3d.coords$x,s3d.coords$y,labels = joint_data$Species,cex = .5,pos = 4)
 
 
 ### Create supplementary table with each computed  pearson and spearman correlation coefficient and p_value fore each trait with lifespan
-traits <- c("Mutation rate", "Litter size", "Heart rate", "Metabolic Rate", "Respiratory rate", "Body mass", "Female maturity", "Male maturity")
-pearson_coefficients <- c(corr_life_mut$estimate, corr_life_litter$estimate, corr_life_heart$estimate, corr_life_meta$estimate, corr_life_lung$estimate, corr_life_weight$estimate, corr_life_female$estimate, corr_life_male$estimate)
-pearson_p_values <- c(corr_life_mut$p.value, corr_life_litter$p.value, corr_life_heart$p.value, corr_life_meta$p.value, corr_life_lung$p.value, corr_life_weight$p.value, corr_life_female$p.value, corr_life_male$p.value)
-spearman_coefficients <- c(corr_mut_spearman$estimate, corr_litter_spearman$estimate, corr_heart_spearman$estimate, corr_meta_spearman$estimate, corr_lung_spearman$estimate,
+traits <- c("Mutation rate", "Litter size", "Metabolic Rate", "Heart Rate", "Respiratory rate", "Body mass", "Female maturity", "Male maturity")
+pearson_coefficients <- c(corr_life_mut$estimate, corr_life_litter$estimate, corr_life_meta$estimate, corr_life_heart$estimate,  corr_life_lung$estimate, corr_life_weight$estimate, corr_life_female$estimate, corr_life_male$estimate)
+pearson_p_values <- c(corr_life_mut$p.value, corr_life_litter$p.value, corr_life_meta$p.value, corr_life_heart$p.value, corr_life_lung$p.value, corr_life_weight$p.value, corr_life_female$p.value, corr_life_male$p.value)
+spearman_coefficients <- c(corr_mut_spearman$estimate, corr_litter_spearman$estimate,  corr_meta_spearman$estimate, corr_heart_spearman$estimate, corr_lung_spearman$estimate,
                            corr_weight_spearman$estimate, corr_female_spearman$estimate, corr_male_spearman$estimate)
-spearman_p_values <- c(corr_mut_spearman$p.value, corr_litter_spearman$p.value, corr_heart_spearman$p.value, corr_meta_spearman$p.value, corr_lung_spearman$p.value,
+spearman_p_values <- c(corr_mut_spearman$p.value, corr_litter_spearman$p.value, corr_meta_spearman$p.value, corr_heart_spearman$p.value, corr_lung_spearman$p.value,
                        corr_weight_spearman$p.value, corr_female_spearman$p.value, corr_male_spearman$p.value)
 
-correlations <- data.frame(traits, pearson_coefficients, pearson_p_values, spearman_coefficients, spearman_p_values)
+pearson_p_adj <- p.adjust(pearson_p_values, method = "BH")
+spearman_p_adj <- p.adjust(spearman_p_values, method = "BH")
+correlations <- data.frame(traits, pearson_coefficients, pearson_p_values, pearson_p_adj, spearman_coefficients, spearman_p_values, spearman_p_adj)
 
 
 #### Create supplementary table for Partial Correlations
@@ -437,7 +441,9 @@ partial_pearson_coefficients <- c(partial_heart$estimate, partial_meta$estimate,
 partial_pearson_p_values <- c(partial_heart$p.value, partial_meta$p.value, partial_litter$p.value, partial_lung$p.value, partial_fem$p.value, partial_mass$p.value, partial_male$p.value)
 partial_spearman_coefficients <- c(partial_heart_spearman$estimate, partial_meta_spearman$estimate, partial_litter_spearman$estimate, partial_lung_spearman$estimate, partial_female_spearman$estimate, partial_mass_spearman$estimate, partial_male_spearman$estimate)
 partial_spearman_p_values <- c(partial_heart_spearman$p.value, partial_meta_spearman$p.value, partial_litter_spearman$p.value, partial_lung_spearman$p.value, partial_female_spearman$p.value, partial_mass_spearman$p.value, partial_male_spearman$p.value)
-partial_correlations <- data.frame(partial_traits, partial_pearson_coefficients, partial_pearson_p_values, partial_spearman_coefficients, partial_spearman_p_values)
+partial_pearson_p_adj <- p.adjust(partial_pearson_p_values, method = "BH")
+partial_spearman_p_adj <- p.adjust(partial_spearman_p_values, method = "BH")
+partial_correlations <- data.frame(partial_traits, partial_pearson_coefficients, partial_pearson_p_values, partial_pearson_p_adj, partial_spearman_coefficients, partial_spearman_p_values, partial_spearman_p_adj)
 
 ### Create supplements for linear fits
 linear_models <- c("Mutation rate only", "Heart beat + Mutation Rate", "Metabolic Rate + Mutation Rate", "Litter size + Mutation Rate", "Respiratory Rate + Mutation Rate", "Female Maturity + Mutation Rate", "Body mass  + Mutation rate", "Male Maturity + Mutation Rate")
