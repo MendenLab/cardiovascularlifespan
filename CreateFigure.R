@@ -11,7 +11,7 @@ library(scatterplot3d)
 library(cowplot)
 library(writexl)
 
-raw_data <- read_excel("/Users/martin.meinel/Documents/Matters Arising/dataset_for_analysis.xlsx")
+raw_data <- read_excel("/Users/martin.meinel/Documents/Matters Arising/data.xlsx")
 ### Analysis of metabolic rate with lifespan ###############################
 corr_life_meta <- cor.test(log10(raw_data$lifespan),log10(raw_data$mass_specific_BMR),method="pearson")
 corr_meta_spearman <- cor.test(log10(raw_data$lifespan),log10(raw_data$mass_specific_BMR),method="spearman")
