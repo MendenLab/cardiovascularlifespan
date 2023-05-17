@@ -37,6 +37,52 @@ library(cowplot)
 ```
 
 
+### Load mutation data from Cagan et al. They identified 3 different mutational signatures in the mammals and deconvolved the somatic mutation rates
+```{r}
+load('~/Desktop/Projects/life_expetancy_of_species/CrossSpecies2021/data/processed/Burdens_Rates.RData')
+mut_rates_all=read_excel("mutation_burdens.xlsx")
+strings <- c('Sample','Individual','Species','Age (years)','SBS','Substitution')
+cols <- grep(paste(strings, collapse="|"), names(mut_rates_all))
+mut_rates<- mut_rates_all[,cols]
+
+
+mut_rates_df=data.frame()
+
+for (species in unique(mut_rates$Species)){
+    df=mut_rates[mut_rates$Species==species,]
+    
+    # Convert to numeric if chr column
+    df <- df %>%
+      mutate_if(is.character, as.numeric)
+    
+    ## Drop rows with Nans
+    df=df[complete.cases(df$`Substitution rate per year`),]
+    
+    ## Calculate the weighted mean of all mutation metric columns
+    mean_df=df %>% 
+      group_by('Individual') %>% 
+        summarise(across(.cols = -'Individual', .fns = mean))
+  
+    ## Add common name to the data frame as it was lost due to being a string column
+    mean_df$common_name=species
+    ## Add mean values of species to the main dataframe collecting the results
+    mut_rates_df=rbind(mut_rates_df,mean_df)
+  
+}
+
+## Drow NaN rows
+mut_rates_df=mut_rates_df[complete.cases(mut_rates_df$`Substitution rate per year`),]
+## Drop columns wit all NaNs
+mut_rates_df= mut_rates_df[, colSums(!is.na(mut_rates_df)) ==nrow(mut_rates_df)]
+
+## Select column with mutation rate data + common name to merge it with trait data
+sbs_rates_colnames=grep(paste(c('per year','common_name','exposure'), collapse="|"), names(mut_rates_df))
+mut_rates_df=mut_rates_df[,sbs_rates_colnames]
+
+## Rename column names for an easier use
+colnames(mut_rates_df)=c('SBS1_expos','SBSB_expos','SBSC_expos','subs_rate_per_year','SBS1_rate','SBSB_rate','SBSC_rate','common_name')
+```
+
 ### 1. Calculate the logarithms of the life history traits and add them as new columns
 ### 2. Plot the associations between the life history traits
 
@@ -93,11 +139,15 @@ d[,'calculated_spec_met_rate_W']=0.001*exp((1/303-1/310)*0.63/1.38*10^-20)*d[,'h
 d[,'phylogenetic_tree_main_branch']=as.factor(d$phylogenetic_tree_main_branch)
 
 
+## Merge mutation rate data with life trait data
+d=merge(d, mut_rates_df, by = "common_name")
+
 
 ## Calculate log transformation of selected  columns
 cols_to_be_log_transformed=c('lifespan','mutation_rate','respiratory_rate',
                              'heart_rate','adult_mass','time_to_sexual_maturity_female','time_to_sexual_maturity_male',
-                             'mass_specific_BMR','basal_metabolic_rate')
+                             'mass_specific_BMR','basal_metabolic_rate',
+                             'SBS1_expos','SBSB_expos','SBSC_expos','subs_rate_per_year','SBS1_rate','SBSB_rate','SBSC_rate')
                              # These columns are sparse
                              #'Superoxide_production_liver','SOD_activity_liver','Superoxide_production_kidney',
                              #'H2O2_production_kidney','Superoxide_production_heart','H2O2_production_heart',
@@ -116,39 +166,13 @@ for (col in cols_to_be_log_transformed){
 columns_for_final_analysis=c('lifespan','mutation_rate','respiratory_rate','heart_rate','adult_mass',
                              'time_to_sexual_maturity_female','time_to_sexual_maturity_male','litter_size',
                              'mass_specific_BMR','basal_metabolic_rate','phylogenetic_grandorder_order',
-                             'common_name')
+                             'common_name','subs_rate_per_year','SBS1_rate','SBSB_rate','SBSC_rate',
+                              'SBS1_expos','SBSB_expos','SBSC_expos')
 
 
 write.csv(d[,columns_for_final_analysis],'dataset_for_analysis.csv',row.names=TRUE)
 ```
-```{r}
-load('~/Desktop/Projects/life_expetancy_of_species/CrossSpecies2021/data/processed/Burdens_Rates.RData')
-mut_rates_all=read_excel("mutation_burdens.xlsx")
-strings <- c('Sample','Individual','Species','Age (years)','SBS','Substitution')
-cols <- grep(paste(strings, collapse="|"), names(mut_rates_all))
-mut_rates<- mut_rates_all[,cols]
 
-sbs_rates_colnames=grep(paste(c('SBS','Substitution rate per year'), collapse="|"), names(mut_rates_all))
-
-mut_rates_df=data.frame()
-
-for (species in unique(mut_rates$Species)){
-    df=mut_rates[mut_rates$Species==species,]
-    df <- df %>%
-    mutate_if(is.character, as.numeric)
-    
-    mean_df=df %>% 
-      group_by('Individual') %>% 
-        summarise(across(.cols = -'Individual', .fns = mean))
-    print(df)
-    print(mean_df)
-    mean_df$Species=species
-    mut_rates_df=rbind(mut_rates_df,mean_df)
-  
-}
-
-mut_rates_df[,c('Species','Substitution rate per year')]
-```
 
 ## Read phylogenetic tree data
 ## 1. Read tree that has been constructed using mtDNA
@@ -353,9 +377,9 @@ life_traits_list=list(life_traits=life_traits,log_life_traits=log_life_traits,as
 pgls_fit_package='caper' 
 
 
-for (n in 3:length(names(life_traits_list))){
+for (n in  3:length(names(life_traits_list))){ 
   cols=life_traits_list[[names(life_traits_list)[n]]]
-    for (y_val in c('log_lifespan','log_mass_specific_BMR','log_mutation_rate')){
+    for (y_val in c('log_lifespan','log_mass_specific_BMR')){ #'log_SBSC_rate','log_SBS1_rate','log_SBSB_rate'
       
       lambda_estimate_df=data.frame()
       for (x_val in cols[!grepl(y_val,cols)]){
@@ -865,10 +889,10 @@ for (n in 1:length(figure_names)){
 
 ### Names of the variables we want to include in the analysis
 partial_corr_colnames=c('log_lifespan','log_mutation_rate','log_respiratory_rate','log_heart_rate','log_adult_mass','log_time_to_sexual_maturity_female',
-                        'log_time_to_sexual_maturity_male','litter_size','log_mass_specific_BMR')#'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
-                        
-                        # These columns are either sparse, or irrelevant (body temperature)
-                        #'body_temperature','log_mass_specific_BMR','log_Mitochondrial_respiration_heart','log_H2O2_production_heart')
+                        'log_time_to_sexual_maturity_male','litter_size','mass_specific_BMR')#'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
+
+#partial_corr_colnames=c('lifespan','mutation_rate','respiratory_rate','heart_rate','adult_mass','time_to_sexual_maturity_female',
+#                        'time_to_sexual_maturity_male','litter_size','mass_specific_BMR')
 
 
 #partial_corr_colnames=assessed_traits
@@ -878,7 +902,7 @@ phylogenetic_correction='no'
 
 
 ### Select variables to regress out
-var_to_regress_out=c('log_mass_specific_BMR')
+var_to_regress_out=c('log_mutation_rate')
 #log_adult_mass,'log_basal_metabolic_rate',log_mass_specific_BMR,log_mutation_rate,'log_mutation_rate','mass_specific_BMR'
 
 
@@ -903,7 +927,7 @@ for (var in vars_to_loop_through){
   df=d[!is.na(d[,var]),]
   df=as.data.frame(df)
   df=df[,c(partial_corr_colnames,'common_name','species_name','nutrition','body_temperature')]
-  #df=df[!is.element(rownames(df),c('Felis_catus')),] #'Felis_catus'
+  df=df[!is.element(rownames(df),c('Felis_catus')),] #'Felis_catus'
  
 
   ###  Create linear models in order to regress out variables
@@ -1054,14 +1078,13 @@ ggplot(data=partial_pearson_corr_result_df,
 
 ####  Partial correlation analysis with bootstrap to compare Pearson's R's P-value distributions between traits
 
-```{r fig.width=4, fig.height=4}
+```{r fig.width=6, fig.height=2.5}
 
 ### Names of the variables we want to include in the analysis
-partial_corr_colnames=c('log_lifespan','log_mutation_rate','log_respiratory_rate','log_heart_rate','log_adult_mass','log_time_to_sexual_maturity_female',
-                        'log_time_to_sexual_maturity_male','litter_size','log_mass_specific_BMR')#'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
+partial_corr_colnames=c('log_lifespan','log_mutation_rate','log_respiratory_rate','log_heart_rate','log_adult_mass',
+                        'log_time_to_sexual_maturity_female','log_time_to_sexual_maturity_male','litter_size',
+                        'log_mass_specific_BMR')#'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
                         
-                        # These columns are either sparse, or irrelevant (body temperature)
-                        #'body_temperature','log_mass_specific_BMR','log_Mitochondrial_respiration_heart','log_H2O2_production_heart')
 
 
 #partial_corr_colnames=assessed_traits
@@ -1080,7 +1103,7 @@ var_to_correlate_with=c('log_lifespan') # log_lifespan,log_mass_specific_BMR,log
 
 ## Create list of variables to loop through -> drop the variables that are used in regression
 vars_to_loop_through=partial_corr_colnames[!is.element(partial_corr_colnames,c(var_to_regress_out,var_to_correlate_with))]
-
+#vars_to_loop_through=c('log_mass_specific_BMR','log_heart_rate')
 
 
 ## Created nested list for collecting the results of bootstrapping
@@ -1096,9 +1119,10 @@ for (i in 1:length(vars_to_loop_through)) {
 
 ## Create bootsrapped dataset
 bootstrapped_samples <- list()
-num_samples <- 500
+num_samples <- 1000
 
-
+#d2=d[d$common_name!='Rat',]
+set.seed(1)
 for (i in 1:num_samples) {
   bootstrapped_sample <- sample_n(d, size = nrow(d), replace = TRUE)
   bootstrapped_samples[[i]] <- bootstrapped_sample
@@ -1120,7 +1144,7 @@ for (bootstrapped_d in bootstrapped_samples){
     # Species common name + nutrition + litter_size + body_temperature
     df=bootstrapped_d[!is.na(bootstrapped_d[,var]),]
     df=as.data.frame(df)
-    df=df[,c(partial_corr_colnames,'common_name','species_name','nutrition','body_temperature')]
+    df=df[,c(partial_corr_colnames,'common_name','species_name')]
     #df=df[!is.element(rownames(df),c('Felis_catus')),] #'Felis_catus'
    
   
@@ -1133,15 +1157,31 @@ for (bootstrapped_d in bootstrapped_samples){
     
     # Check if phylogenetic correction is yes/no
     if (phylogenetic_correction=='no'){
-      ## Execute partial correlation function and save + print result
-      pearson_res=(pcor.test(df[,var_to_correlate_with],df[,var],df[,var_to_regress_out],method = 'pearson'))
-      pearson_r=pearson_res$estimate
-      pearson_p_value=pearson_res$p.value
+      ## Execute partial correlation function and save + print result 
       
-      spearman_res=(pcor.test(df[,var_to_correlate_with],df[,var],df[,var_to_regress_out],method = 'spearman'))
-      spearman_r=spearman_res$estimate
-      spearman_p_value=spearman_res$p.value
+      ## If during the calculation of correlations unreliable R or p-values are calculated due to encountering singularity in the     
+      #  variance-covariance matrix, set those R and p-values as NaNs
       
+      # Pearson partial correlation
+      possibleError=tryCatch({pearson_res=(pcor.test(df[,var_to_correlate_with],df[,var],df[,var_to_regress_out],method='pearson'))
+                pearson_r=pearson_res$estimate
+                pearson_p_value=pearson_res$p.value
+                },error=function(e){return(e)},
+                warning=function(w){return(w)})
+      if(inherits(possibleError, "error")|inherits(possibleError, "warning")){
+        pearson_r=NA
+        pearson_p_value=NA}
+      
+      # Spearman partial correlation
+      possibleError=tryCatch({spearman_res=(pcor.test(df[,var_to_correlate_with],df[,var],df[,var_to_regress_out],method='spearman'))
+                spearman_r=spearman_res$estimate
+                spearman_p_value=spearman_res$p.value
+                },error=function(e){return(e)},
+                warning=function(w){return(w)})
+      if(inherits(possibleError, "error")|inherits(possibleError, "warning")){
+        spearman_r=NA
+        spearman_p_value=NA}
+  
       ## Add results to dataframe
       partial_pearson_corr_result_df[var,]=c(pearson_r,pearson_p_value,spearman_r,spearman_p_value,NA,NA)
       
@@ -1159,9 +1199,8 @@ for (bootstrapped_d in bootstrapped_samples){
   }
 }
 
-```
 
-```{r fig.width=6, fig.height=2.5}
+
 # function to extract legend from plot
 get_only_legend <- function(plot) {
   plot_table <- ggplot_gtable(ggplot_build(plot))
@@ -1173,11 +1212,14 @@ get_only_legend <- function(plot) {
 
 vars_to_compare=c('log_heart_rate','log_mass_specific_BMR')
 #vars_to_compare=vars_to_loop_through[which(vars_to_loop_through!='log_mutation_rate')]
-my_cols=qualitative_hcl(length((vars_to_compare)),palette = "Dark 2") 
+my_cols=qualitative_hcl(length((vars_to_compare)),palette = "Pastel 1") 
 
 
+```
 
+```{r fig.width=6, fig.height=2.5}
 plot_list=list()
+#wilcox_p_list=list()
 for (correlation_result_metric in result_names_list){
   plot_df=data.frame()
   
@@ -1185,12 +1227,19 @@ for (correlation_result_metric in result_names_list){
     plot_df=rbind(plot_df,unlist(bootstrapped_results[[var]][[correlation_result_metric]]))
   }
   
-  plot_df=t(plot_df)
-  colnames(plot_df)=vars_to_compare
-  rownames(plot_df)=NULL
-
-  melted_df=melt(plot_df)
-  colnames(melted_df)=c('Bootstrap_number','variable','value')
+    plot_df=t(plot_df)
+    colnames(plot_df)=vars_to_compare
+    rownames(plot_df)=NULL
+    plot_df=na.omit(plot_df)
+     
+    wilcox_p_val=wilcox.test(plot_df[,vars_to_compare[1]], plot_df[,vars_to_compare[2]])$p.value
+    
+    print(correlation_result_metric)
+    print(wilcox_p_val)
+             
+    
+    melted_df=melt(plot_df)
+    colnames(melted_df)=c('Bootstrap_number','variable','value')
   
    p=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
             geom_histogram(alpha = 0.5,position="identity") +
@@ -1202,10 +1251,21 @@ for (correlation_result_metric in result_names_list){
                   axis.line.y.left =  element_line(color = "black"),
                   axis.line.x.bottom = element_line(color = "black"))+
             geom_vline(xintercept = 0.05,  color="red", 
-                 linetype="dashed", size=1)
+                       linetype="dashed", size=1)
+   
+   # Calculate x and y range of the plot
+   plot_range <- ggplot_build(p)$layout$panel_params[[1]]$y.range
+   x_range <- ggplot_build(p)$layout$panel_params[[1]]$x.range
+  
+  #  Define x and y coordinates for the text label
+   x_coord <- x_range[1] + 0.7 * diff(x_range)
+   y_coord <- plot_range[1] + 0.7 * diff(plot_range)
+   p=p + annotate('text',x = x_coord, y = y_coord,label=paste('Wilcoxon p-value\n',wilcox_p_val))
+
    
    legend_labels=gsub('_',' ',vars_to_compare)
    legend_labels=gsub('log','',legend_labels)
+   legend_labels=gsub('heart','resting heart',legend_labels)
    legend_labels=tools::toTitleCase(tolower(legend_labels))
    legend_labels=gsub('Mass Specific Bmr','Mass-Specific BMR',legend_labels)
    
@@ -1220,13 +1280,14 @@ for (correlation_result_metric in result_names_list){
             ggtitle(correlation_result_metric)
    
    plot_list[correlation_result_metric]=list(p)
+   #wilcox_p_list[correlation_result_metric]=wilcox_p_val
    combined_legend=get_only_legend(plot_for_legend)
 }
 
 p2=plot_grid(plotlist = plot_list[c('Pearson p-value','adj. Pearson p-value')],ncol = 2)
 p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(1, 0.25))
 
-subplot_title <- ggdraw() + draw_label('Significance of partial correlation with lifespan after \ncorrecting for somatic mutation rate (500 resamples)',                                        size = 20,fontface='bold') #
+subplot_title <- ggdraw() + draw_label(paste('Significance of partial correlation with lifespan after \ncorrecting for somatic mutation rate',num_samples,'resamples'),size = 20,fontface='bold') #
                  #draw_text(subplot_letter, x=0.05,y=0.5,size = 15,fontface='bold') 
       
 ## Add title to subplot
@@ -1276,9 +1337,13 @@ d[,'log_total_respiratory_cycles_in_lifetime']=log10(d[,'total_respiratory_cycle
 ## y:'exp(Ea/KTa)*B*Tlife/a [kJ]'
 ## x: E2019*exp(Ea/KTa)*Nr*M [kJ]
 
+Ta=273+37
+Ea=0.63*1.602*10^-19
+K=1.38*10^-20
+E2019=0.001
 
-d[,'y']=exp((0.63*1.602*10^-19)/((1.38*10^-20)*310))*(d[,'BMR (kcal/kg BW/day)'])*(d[,'Adult mass (g)']/1000)*(d$`Lifespan_80 (y) [Species 360/Human Mortality Database]`)*365*4184/(4.5*1000)
-d[,'x']=0.001*exp((0.63*1.602*10^-19)/((1.38*10^-20)*303))*1.62*10^8*d[,'Adult mass (g)']/1000 
+d[,'y']=exp(Ea/(K*Ta))*(d[,'BMR (kcal/kg BW/day)'])*(d[,'Adult mass (g)']/1000)*(d$`Lifespan_80 (y) [Species 360/Human Mortality Database]`)*365*4184/(4.5*1000)
+d[,'x']=0.001*exp(Ea/(K*Ta))*1.62*10^8*d[,'Adult mass (g)']/1000 
 
 d[,'log_y']=d[,'y']
 d[,'log_x']=d[,'x']
