@@ -34,6 +34,7 @@ library(colorspace)
 library(car)
 library(reshape2)
 library(cowplot)
+library(broom)
 ```
 
 
@@ -1120,8 +1121,9 @@ for (i in 1:length(vars_to_loop_through)) {
 ## Create bootsrapped dataset
 bootstrapped_samples <- list()
 num_samples <- 1000
+r_squared_mutation_only <- c()
+r_squared_mutation_heart <- c()
 
-#d2=d[d$common_name!='Rat',]
 set.seed(1)
 for (i in 1:num_samples) {
   bootstrapped_sample <- sample_n(d, size = nrow(d), replace = TRUE)
@@ -1132,7 +1134,18 @@ for (i in 1:num_samples) {
 ### Loop over bootstrapped dataset and calculate the Partial correlation for each dataset and collect the results 
 for (bootstrapped_d in bootstrapped_samples){
   
-  ## Initialize dataframe to collect the partial perason correlation results into if no phylogenetic correction
+  ##### CALULCATION OF R^2 COMPARISON
+  ## Calculate the adjusted R^2 values of the 2 models and save them in vectors
+  somatic_fit <- lm((log_lifespan) ~ (log_mutation_rate), data = bootstrapped_d)
+  stats_somatic_fit <- glance(somatic_fit)
+  r_squared_mutation_only <- c(r_squared_mutation_only, stats_somatic_fit$adj.r.squared)
+  somatic_heart_fit <- lm((log_lifespan) ~ (log_heart_rate) + (log_mutation_rate), data = bootstrapped_d)
+  stats_somatic_heart <- glance(somatic_heart_fit)
+  r_squared_mutation_heart <- c(r_squared_mutation_heart, stats_somatic_heart$adj.r.squared)
+  
+  
+  ###### CALCULATION OF PEARSON CORRELATION
+  ## Initialize dataframe to collect the partial pearson correlation results into if no phylogenetic correction
   partial_pearson_corr_result_df=data.frame(matrix(NA,ncol=length(result_names_list),nrow=length(vars_to_loop_through),
                                                  dimnames=list(vars_to_loop_through,result_names_list)))
   colnames(partial_pearson_corr_result_df)=result_names_list
@@ -1198,8 +1211,37 @@ for (bootstrapped_d in bootstrapped_samples){
       bootstrapped_results[[rown]][[coln]]=append(bootstrapped_results[[rown]][[coln]],partial_pearson_corr_result_df[rown,coln])
   }
 }
+saveRDS(bootstrapped_results,"bootstrapped_partial_corr_results.rds")
 
 
+### COMPARISON OF UNIVARIATE (lifespan~somatic_mutation_rate) AND MULTIVARIATE REGFRESSION MODELS' R^2 VALUES  (lifespan~somatic_mutation_rate+resting_heart_rate) WITH BOOTSRAPPING ANALYSIS
+# Bootstrapping Analysis
+# r_squared_mutation_only <- c()
+# r_squared_mutation_heart <- c()
+# # bootstrap 1000 times
+# for (i in 1:1000){
+#   bootstrapped_data <- dplyr::sample_n(d, size = 15, replace = T)
+#   somatic_fit <- lm(log10(log_lifespan) ~ log10(log_mutation_rate), data = bootstrapped_data)
+#   stats_somatic_fit <- glance(somatic_fit)
+#   r_squared_mutation_only <- c(r_squared_mutation_only, stats_somatic_fit$adj.r.squared)
+#   somatic_heart_fit <- lm(log10(log_lifespan) ~ log10(log_heart_rate) + log10(log_mutation_rate), data = bootstrapped_data)
+#   stats_somatic_heart <- glance(somatic_heart_fit)
+#   r_squared_mutation_heart <- c(r_squared_mutation_heart, stats_somatic_heart$adj.r.squared)
+# }
+saveRDS(r_squared_mutation_heart, "bootstrapped_r_squared_mutation_heart.rds")
+saveRDS(r_squared_mutation_only, "bootstrapped_r_squared_mutation_only.rds")
+```
+
+```{r}
+table(bootstrapped_samples[[1]]['common_name'])
+table(bootstrapped_samples[[2]]['common_name'])
+
+```
+
+
+### Plot the results of partial correlation bootsrapping analysis
+```{r fig.width=6, fig.height=2.5}
+bootstrapped_results=readRDS("bootstrapped_partial_corr_results.rds")
 
 # function to extract legend from plot
 get_only_legend <- function(plot) {
@@ -1215,88 +1257,131 @@ vars_to_compare=c('log_heart_rate','log_mass_specific_BMR')
 my_cols=qualitative_hcl(length((vars_to_compare)),palette = "Pastel 1") 
 
 
-```
-
-```{r fig.width=6, fig.height=2.5}
 plot_list=list()
 #wilcox_p_list=list()
-for (correlation_result_metric in result_names_list){
-  plot_df=data.frame()
-  
-  for (var in vars_to_compare){
-    plot_df=rbind(plot_df,unlist(bootstrapped_results[[var]][[correlation_result_metric]]))
-  }
-  
+
+for (log_transform_p in c(FALSE,TRUE)){
+  for (correlation_result_metric in result_names_list){
+    plot_df=data.frame()
+    
+    ## Set significance lvel to draw in the plot as a vertical line
+    if (grepl('adj', correlation_result_metric,fixed=TRUE)){
+      #print('YES')
+       sign_level=0.2
+    } else {sign_level=0.05}
+    
+
+    ## Create dataframe out of the bootstrapped results of the variables considered for the plot
+    for (var in vars_to_compare){
+        plot_df=rbind(plot_df,unlist(bootstrapped_results[[var]][[correlation_result_metric]]))}
+      
+    ## Rename colnames and omit NAN values  
     plot_df=t(plot_df)
     colnames(plot_df)=vars_to_compare
     rownames(plot_df)=NULL
     plot_df=na.omit(plot_df)
-     
-    wilcox_p_val=wilcox.test(plot_df[,vars_to_compare[1]], plot_df[,vars_to_compare[2]])$p.value
     
-    print(correlation_result_metric)
-    print(wilcox_p_val)
-             
+    ## Compare the two variables' distribution with Wilcoxon test
+    #wilcox_p_val=wilcox.test(plot_df[,vars_to_compare[1]], plot_df[,vars_to_compare[2]])$p.value
     
+    ## Melt plot_df to make coloring of the two distribtions easier in ggplot
     melted_df=melt(plot_df)
     colnames(melted_df)=c('Bootstrap_number','variable','value')
-  
-   p=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
+    
+    ## Calculate the -log10 transforms of p-vales and significance levels
+    if (log_transform_p==TRUE){
+        melted_df$value=-log10(melted_df$value)
+        x_label=gsub('p-value','-log10(p-value)',correlation_result_metric)
+        sign_level=-log10(sign_level)
+    } else {x_label=correlation_result_metric}
+    
+    ## Create ggplot
+    p=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
             geom_histogram(alpha = 0.5,position="identity") +
             geom_density(alpha = 0.25)+
-            labs(x=correlation_result_metric)+
+            labs(x=x_label)+
             theme(legend.position="none",
                   axis.title.x=element_text(size=15),
                   panel.background = element_rect(fill = "white"),
                   axis.line.y.left =  element_line(color = "black"),
                   axis.line.x.bottom = element_line(color = "black"))+
-            geom_vline(xintercept = 0.05,  color="red", 
+            geom_vline(xintercept = sign_level,  color="red", 
                        linetype="dashed", size=1)
-   
-   # Calculate x and y range of the plot
-   plot_range <- ggplot_build(p)$layout$panel_params[[1]]$y.range
-   x_range <- ggplot_build(p)$layout$panel_params[[1]]$x.range
+     
+     #  # Calculate x and y range of the plot for showing Wilcoxon p-value
+     #  plot_range <- ggplot_build(p)$layout$panel_params[[1]]$y.range
+     #  x_range <- ggplot_build(p)$layout$panel_params[[1]]$x.range
+     # 
+     # #  Define x and y coordinates for the text label
+     #  x_coord <- x_range[1] + 0.7 * diff(x_range)
+     #  y_coord <- plot_range[1] + 0.7 * diff(plot_range)
+     #  p=p + annotate('text',x = x_coord, y = y_coord,label=paste('Wilcoxon p-value\n',wilcox_p_val))
   
-  #  Define x and y coordinates for the text label
-   x_coord <- x_range[1] + 0.7 * diff(x_range)
-   y_coord <- plot_range[1] + 0.7 * diff(plot_range)
-   p=p + annotate('text',x = x_coord, y = y_coord,label=paste('Wilcoxon p-value\n',wilcox_p_val))
-
-   
-   legend_labels=gsub('_',' ',vars_to_compare)
-   legend_labels=gsub('log','',legend_labels)
-   legend_labels=gsub('heart','resting heart',legend_labels)
-   legend_labels=tools::toTitleCase(tolower(legend_labels))
-   legend_labels=gsub('Mass Specific Bmr','Mass-Specific BMR',legend_labels)
-   
-   plot_for_legend=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
+    
+    ## Clean up names of variables 
+    legend_labels=gsub('_',' ',vars_to_compare)
+    legend_labels=gsub('log','',legend_labels)
+    legend_labels=gsub('heart','resting heart',legend_labels)
+    legend_labels=tools::toTitleCase(tolower(legend_labels))
+    legend_labels=gsub('Mass Specific Bmr','Mass-Specific BMR',legend_labels)
+    
+    ## Create a plot only to extract the legend from it that willbe shown on the plot_grid object at the end
+    plot_for_legend=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
             geom_histogram(alpha = 0.7,position="identity") +
             geom_density(alpha = 0.25)+
             theme(legend.background = element_rect(fill = NA))+
             scale_fill_manual(name='Trait',labels = legend_labels, values=my_cols)+
             theme(legend.text = element_text(size=15),
                   legend.title = element_text(size=17))+
-            
             ggtitle(correlation_result_metric)
-   
-   plot_list[correlation_result_metric]=list(p)
-   #wilcox_p_list[correlation_result_metric]=wilcox_p_val
-   combined_legend=get_only_legend(plot_for_legend)
-}
-
-p2=plot_grid(plotlist = plot_list[c('Pearson p-value','adj. Pearson p-value')],ncol = 2)
-p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(1, 0.25))
-
-subplot_title <- ggdraw() + draw_label(paste('Significance of partial correlation with lifespan after \ncorrecting for somatic mutation rate',num_samples,'resamples'),size = 20,fontface='bold') #
-                 #draw_text(subplot_letter, x=0.05,y=0.5,size = 15,fontface='bold') 
-      
-## Add title to subplot
-plots_with_legend_title=plot_grid(subplot_title, p2_with_legend, ncol=1, rel_heights=c(0.07, 0.49),scale = 1)
-print(plots_with_legend_title)
+    
+    ## Save created plots and legends in a list
+    plot_list[correlation_result_metric]=list(p)
+    #wilcox_p_list[correlation_result_metric]=wilcox_p_val
+    combined_legend=get_only_legend(plot_for_legend)
+  }
+  
+  ## Add the 2 ggplots objects to a plot_grid object + add legend in the second step
+  p2=plot_grid(plotlist = plot_list[c('Pearson p-value','adj. Pearson p-value')],ncol = 2)
+  p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(1, 0.25))
+  
+  ## Create title for the final plot
+  subplot_title <- ggdraw() + draw_label(paste0('Significance levels of partial correlation with lifespan after \ncorrecting for somatic mutation rate (',num_samples,' resamples)'),size = 20,fontface='bold') #
+                   #draw_text(subplot_letter, x=0.05,y=0.5,size = 15,fontface='bold') 
+        
+  ## Add title to plot
+  plots_with_legend_title=plot_grid(subplot_title, p2_with_legend, ncol=1, rel_heights=c(0.07, 0.49),scale = 1)
+  print(plots_with_legend_title)
+}  
 
 
 ```
 
+### Plot the results of linear regression-R^2 bootsrapping analysis
+```{r fig.width=2.5, fig.height=2.5}
+r_squared_mutation_heart=readRDS("bootstrapped_r_squared_mutation_heart.rds")
+r_squared_mutation_only=readRDS("bootstrapped_r_squared_mutation_only.rds")
+
+plot_df <- data.frame(
+  'Model type' = c( rep("Somatic mutation rate only", 1000), rep("Somatic mutation rate + \nResting heart rate", 1000) ),
+  value = c( r_squared_mutation_only, r_squared_mutation_heart),check.names = FALSE
+)
+
+## Create ggplot
+p=ggplot(data=plot_df,aes(x=value, fill=`Model type`,y=..density..)) +
+        geom_histogram(alpha = 0.5,position="identity") +
+        geom_density(alpha = 0.25)+
+        labs(x='adj. R-squared values')+
+        theme(legend.position=c(0.3,0.8),
+              axis.title.x=element_text(size=15),
+              panel.background = element_rect(fill = "white"),
+              axis.line.y.left =  element_line(color = "black"),
+              axis.line.x.bottom = element_line(color = "black"),
+              plot.title = element_text(size = 13, face = "bold",hjust = 0.5)) +
+        ggtitle('Adj. R-squared values of two models \npredicting lifespan (1000 resamples)') 
+
+print(p)
+```
 
 
 
