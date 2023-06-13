@@ -44,7 +44,9 @@ library(pheatmap)
 
 ## LOAD dataset
 
-lht=read_sheet('https://docs.google.com/spreadsheets/d/1gQKRh5ixhlj8CRG7NM6uOFkg3PQXyd3e2aTJ6U-x91I/edit?usp=share_link',sheet='1j - Data for analysis')
+#lht=read_sheet('https://docs.google.com/spreadsheets/d/1gQKRh5ixhlj8CRG7NM6uOFkg3PQXyd3e2aTJ6U-x91I/edit?usp=share_link',
+#               sheet='1j - Data for analysis')
+lht=read_excel('Supplementary Data/Supplementary Table 1.xlsx',sheet='1j - Data for analysis')
 
 ## Set species name as rowname for phylogenetic analysis later
 d=lht
@@ -107,7 +109,7 @@ plot(midpoint.root(cons_tree_10000),main=paste('least squares method - 10 000 tr
 ##    1. Midpoint root the selected consensus tree for analysis with the caper package
 ##    2. Save previously created rooted consensus tree
 ```{r}
-trees=list(least_squares=cons_least_squares_10000,mean_edge=cons_mean_edge_10000)
+#trees=list(least_squares=cons_least_squares_10000,mean_edge=cons_mean_edge_10000)
 
 tree=cons_tree_10000
 
@@ -193,22 +195,21 @@ tree_for_ggplot$tip.label[grepl('lemur',tree_for_ggplot$tip.label)]='Ring-tailed
 subplot_label_fontsize=17
 
 ### PLOT PHYLOGENETIC TREE
-treeplot=ggtree(tree_for_ggplot,layout='fan',size=1.5,open.angle = 160)+ #coord_flip()+ # add "aes(color=group)" to ggtree function to color tips of tree
+treeplot=ggtree(tree_for_ggplot,layout='fan',size=1.5,open.angle = 160)+ 
         geom_cladelab(data = clade_df,
                     mapping = aes(node = node, label = name, color =name),
                     fontsize = 12,fontface='bold',textcolour='black',offset.text=2,offset=50,barsize=5,angle='auto',align=FALSE)+
         geom_hilight(data = clade_df,
                     mapping = aes(node = node, label = name, fill = name),show.legend= FALSE)+
         geom_hilight(node=12,fill=my_cols[4])+
-        #geom_text(aes(label=node),hjust=-.3,size=15)+
+
         geom_tiplab(size=12,show.legend= FALSE,offset = 1,geom='text',lineheight=0.8)+
         theme(plot.margin = unit(c(5,0,-12,3), "cm"),
               legend.text = element_text(size=28,face='bold'),
               legend.key.size = unit(1.9, 'cm'),
               legend.position=c(0.95,0.5),
               legend.title=element_text(size=33,face='bold'))+
-        #xlim(NA,250)+
-        #ylim(0,25)+
+
         scale_color_manual(name=NULL,values=c(my_cols,'black'), breaks=names(branch_groups),guide='none')+
         scale_fill_manual(name=NULL,values=c(my_cols,'black'), breaks=names(branch_groups),guide='none')+
         guides(override.aes = aes(label = ""),color = guide_legend(override.aes = list(linetype = 0, size=15)))
@@ -270,7 +271,7 @@ hmap=Heatmap((scale(data_for_heatmap)),
                                          grid_width = unit(2, "cm")))
 
 hmap=as.ggplot(hmap)+theme(plot.margin = unit(c(-5,0,-12,0),"cm"))+
-                      annotate("text", label = "bold(b)", x = 0.2, y = 0.88,size=subplot_label_fontsize,parse=TRUE)#+
+                      annotate("text", label = "bold(b)", x = 0.2, y = 0.88,size=subplot_label_fontsize,parse=TRUE)
                     
 
 ### PLOT PCA
@@ -320,8 +321,7 @@ pca_plot=ggplot(data=pca_df,aes_string(x='Dim1',y='Dim2',label='species_names'))
                             )+
                       scale_color_manual(name = '',labels = levels(labels_for_pca),values= my_cols)+
                       guides(color = guide_legend(override.aes = list(linetype = 0, size=9)))+
-                      ggtitle('')#+ 
-                      #ylim(c(-2.6,1.5))+xlim(c(-5.8,4))
+                      ggtitle('')
                       
 pca_plot=pca_plot + annotate("text", label = "bold(c)", x = -5.8, y =2,size=subplot_label_fontsize,parse=TRUE)
 
