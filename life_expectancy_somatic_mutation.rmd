@@ -348,17 +348,14 @@ get_only_legend <- function(plot) {
 
 ## Variables to consider
 lm_colnames=c('log_somatic_mutation_rate','log_respiratory_rate','log_resting_heart_rate','log_adult_mass',
-                    'log_female_sexual_maturity','log_male_sexual_maturity','litter_size','log_mass_specific_BMR')
+              'log_female_sexual_maturity','log_male_sexual_maturity','litter_size','log_mass_specific_BMR')
 
 ## Dependent variables in linear model
 dependent_vars=c('log_lifespan')
 
-## Figure names
-figure_names=c('Supplementary Figure 1','Supplementary Figure 2')
+## Model types
+models=c('univariate','multivariate')
 
-## Figure subtexts
-figure_subtext=c("Diagnostic plots (QQplot, Resiudal plot, Scale-Location plot) of the Fitted univariate models. The first rows show the diagnostic plots \nfor the ordinary least squares (OLS) models, where Pagel's lambda=0 meaning statistical independence between the species. The \nsecond row of plots belong to the phylogenetic generalised least squares model (PGLS) where the Pagel's lambda parameter was \nset to a fixed value of 1, assuming a Brownian-motion model of evolution and a strong phylogenetic signal.",
-                 "Diagnostic plots (QQplot, Resiudal plot, Scale-Location plot) of the Fitted multivariate models. The first rows show the diagnostic plots \nfor the ordinary least squares (OLS) models, where Pagel's lambda=0 meaning statistical independence between the species. The \nsecond row of plots belong to the phylogenetic generalised least squares model (PGLS) where the Pagel's lambda parameter was \nset to a fixed value of 1, assuming a Brownian-motion model of evolution and a strong phylogenetic signal.")
 
 ## Create list with fixed independent variable names. This/These variable(s) will be used as a fixed independent variable(s) in the model alongside one additional independent variable that is added to the formula. If fixed independent variable==NULL, then only the additional independent variable as considered in the model
 
@@ -369,10 +366,7 @@ subplot_letters=c('a','b','c','d','e','f','g','h')
 
 n_of_figs=0
 
-for (n in 1:length(figure_names)){
-  ## Set figure name
-  fig_name=figure_names[n]
-  fig_subtext=figure_subtext[n]
+for (n in 1:length(models)){
   
   ## Fixed independent variables in linear model
   fixed_independent_vars=fixed_independent_varnames[n]
@@ -473,7 +467,6 @@ for (n in 1:length(figure_names)){
                         plot.tag = element_text(face = 'bold',size=axis_label_size*2),
                         plot.tag.position = c(subplot_label_x_coord, subplot_label_y_coord))
                   
-                  #annotate("text", label = "bold(a)", x = -2.7, y = 0.88,size=15,parse=TRUE)
         
       
         individual_plot_list[paste(var,model_name,'qqplot',sep='_')]=list(p1)
@@ -546,9 +539,9 @@ for (n in 1:length(figure_names)){
       ## Create title to subplot
       title_string=tools::toTitleCase(tolower(gsub('_',' ',format(fo))))
       title_string=gsub('Mass Specific Bmr','Mass-Specific BMR',title_string)
-      subplot_title <- ggdraw() + draw_label(title_string, size = 35,fontface='bold') + theme(plot.background = element_rect(fill="white", color = NA))
-        #draw_text(subplot_letter, x=0.05,y=0.5,size = 65,fontface='bold') 
-                       #
+      subplot_title <- ggdraw() + draw_label(title_string, size = 35,fontface='bold') + 
+                      theme(plot.background = element_rect(fill="white", color = NA))
+
       
       ## Add title to subplot
       plots_with_legend_title=cowplot::plot_grid(subplot_title, plots_with_legend, ncol=1, rel_heights=c(0.06, 0.99),scale = 1)
@@ -559,29 +552,276 @@ for (n in 1:length(figure_names)){
       ggsave(filename=paste0('life_expectancy_figs/',fig_name,'.pdf'),plot=plots_with_legend_title,limitsize = FALSE,dpi = 300,bg='white')
       ggsave(filename=paste0('life_expectancy_figs/',fig_name,'.png'),plot=plots_with_legend_title,limitsize = FALSE,dpi = 300,bg='white')
       
-      ## Add subplot to the list of subplots that contains all the subplots for the figure
-      #subplot_list[[subplot_letter]]=(as.ggplot(plots_with_legend_title))
     }
     n_of_figs=k
-    ## Create figure where with all the subplots in one main plot
-    # figure_plot=cowplot::plot_grid(plotlist=subplot_list,ncol=1)
-    # 
-    # ## Create and add figure name and subtext to figure
-    # figure_title=ggdraw() + draw_text(fig_name, x=0.23,y=0.8,size = 65,fontface='bold') + 
-    #             draw_label(fig_subtext, size = 32,hjust = 0, vjust = 0.08, x=0.056,y=0.008)
-    # figure_plot_with_title=cowplot::plot_grid(figure_title, figure_plot, ncol=1, rel_heights=c(0.026, 1),scale = 0.97)
-    # 
-    # ## Save figure as pdf
-    # ggsave2(filename=paste0('life_expectancy_figs/',fig_name,'.pdf'),plot=figure_plot_with_title,limitsize = FALSE)
-    # 
-    # print(figure_plot_with_title)
-  
 }
 ```
 
 
 
+#### 1. Create bootstrapped dataset from original dataset
+#### 2. Calculate adjusted R^2 values for the bootstrapped datasets and save them
+###  3. Calculate Pearson and Spearman correlations
+Partial correlation analysis with bootstrap to compare Pearson's R's P-value distributions between traits
+```{r}
+### Names of the variables we want to include in the analysis
+partial_corr_colnames=c('log_lifespan','log_somatic_mutation_rate','log_respiratory_rate','log_resting_heart_rate','log_adult_mass',
+                        'log_female_sexual_maturity','log_male_sexual_maturity','litter_size',
+                        'log_mass_specific_BMR')
+                        
 
+### Determine if phylogenetic correction is wanted
+phylogenetic_correction='no'
+
+
+### Select variables to regress out
+var_to_regress_out=c('log_somatic_mutation_rate')
+
+### Select variable to correlate with (=variable on the y-axis)
+var_to_correlate_with=c('log_lifespan') 
+
+## Create list of variables to loop through -> drop the variables that are used in regression
+vars_to_loop_through=partial_corr_colnames[!is.element(partial_corr_colnames,c(var_to_regress_out,var_to_correlate_with))]
+#vars_to_loop_through=c('log_mass_specific_BMR','log_heart_rate')
+
+
+## Created nested list for collecting the results of bootstrapping
+bootstrapped_results=list()
+result_names_list=c('Pearson p-value','adj. Pearson p-value')
+
+
+for (i in 1:length(vars_to_loop_through)) {
+  bootstrapped_results[[vars_to_loop_through[i]]] = replicate(length(result_names_list), list(), simplify = FALSE)
+  names(bootstrapped_results[[vars_to_loop_through[i]]])=result_names_list
+}  
+
+
+## Create bootsrapped dataset
+bootstrapped_samples <- list()
+num_samples <- 1000
+r_squared_mutation_only <- c()
+r_squared_mutation_heart <- c()
+
+set.seed(1)
+for (i in 1:num_samples) {
+  bootstrapped_sample <- sample_n(d, size = nrow(d), replace = TRUE)
+  bootstrapped_samples[[i]] <- bootstrapped_sample
+}
+
+
+### Loop over bootstrapped dataset and calculate the Partial correlation for each dataset and collect the results 
+for (bootstrapped_d in bootstrapped_samples){
+  
+  ##### CALULCATION OF R^2 COMPARISON
+  ## Calculate the adjusted R^2 values of the 2 models and save them in vectors
+  somatic_fit <- lm((log_lifespan) ~ (log_somatic_mutation_rate), data = bootstrapped_d)
+  stats_somatic_fit <- glance(somatic_fit)
+  r_squared_mutation_only <- c(r_squared_mutation_only, stats_somatic_fit$adj.r.squared)
+  somatic_heart_fit <- lm((log_lifespan) ~ (log_resting_heart_rate) + (log_somatic_mutation_rate), data = bootstrapped_d)
+  stats_somatic_heart <- glance(somatic_heart_fit)
+  r_squared_mutation_heart <- c(r_squared_mutation_heart, stats_somatic_heart$adj.r.squared)
+  
+  
+  ###### CALCULATION OF PEARSON CORRELATION
+  ## Initialize dataframe to collect the partial pearson correlation results into if no phylogenetic correction
+  partial_pearson_corr_result_df=data.frame(matrix(NA,ncol=length(result_names_list),nrow=length(vars_to_loop_through),
+                                                 dimnames=list(vars_to_loop_through,result_names_list)))
+  colnames(partial_pearson_corr_result_df)=result_names_list
+  
+  ### Loop through remaining variables and perform the steps described above in points 3-5.
+  for (var in vars_to_loop_through){
+  
+    # Drop datapoints that are NAN and select only numeric columns + necessary metadata: 
+    # Species common name + nutrition + litter_size + body_temperature
+    df=bootstrapped_d[!is.na(bootstrapped_d[,var]),]
+    df=as.data.frame(df)
+    df=df[,c(partial_corr_colnames,'common_name','species_name')]
+    #df=df[!is.element(rownames(df),c('Felis_catus')),] #'Felis_catus'
+   
+  
+    ###  Create linear models in order to regress out variables
+    # Create formula necessary for regressing out 'var_to_regress_out'
+    vars_to_regress_out_form=paste(var_to_regress_out,collapse='+')
+    form_regress_out=as.formula(paste(c(var_to_correlate_with,vars_to_regress_out_form),collapse='~'))
+    # Create formula necessary for regressing out 'var'
+    form_var=as.formula(paste(c(var,vars_to_regress_out_form),collapse='~'))
+    
+    # Check if phylogenetic correction is yes/no
+    if (phylogenetic_correction=='no'){
+      ## Execute partial correlation function and save + print result 
+      
+      ## If during the calculation of correlations unreliable R or p-values are calculated due to encountering singularity in the     
+      #  variance-covariance matrix, set those R and p-values as NaNs
+      
+      # Pearson partial correlation
+      possibleError=tryCatch({pearson_res=(pcor.test(df[,var_to_correlate_with],df[,var],df[,var_to_regress_out],method='pearson'))
+                pearson_p_value=pearson_res$p.value
+                },error=function(e){return(e)},
+                warning=function(w){return(w)})
+      if(inherits(possibleError, "error")|inherits(possibleError, "warning")){
+        pearson_p_value=NA}
+      
+
+      ## Add results to dataframe
+      partial_pearson_corr_result_df[var,]=c(pearson_p_value,NA)
+      
+      # Crate title of plot
+      plot_title=paste(c('Corrected for:',paste(var_to_regress_out,collapse='+')),collapse=' ')
+    }
+    
+  }
+  partial_pearson_corr_result_df[,'adj. Pearson p-value']=p.adjust(partial_pearson_corr_result_df[,'Pearson p-value'],method='BH')
+  
+  for (rown in rownames(partial_pearson_corr_result_df)){
+    for (coln in colnames(partial_pearson_corr_result_df))
+      bootstrapped_results[[rown]][[coln]]=append(bootstrapped_results[[rown]][[coln]],partial_pearson_corr_result_df[rown,coln])
+  }
+}
+saveRDS(bootstrapped_results,"bootstrapped_partial_corr_results.rds")
+saveRDS(r_squared_mutation_heart, "bootstrapped_r_squared_mutation_heart.rds")
+saveRDS(r_squared_mutation_only, "bootstrapped_r_squared_mutation_only.rds")
+```
+
+### Supplementary Figure 16
+### Plot the results of linear regression-R^2 bootsrapping analysis
+
+```{r fig.width=2.5, fig.height=1.8}
+r_squared_mutation_heart=readRDS("bootstrapped_r_squared_mutation_heart.rds")
+r_squared_mutation_only=readRDS("bootstrapped_r_squared_mutation_only.rds")
+
+plot_df <- data.frame(
+  'Model type' = c( rep("Somatic mutation rate only", 1000), rep("Somatic mutation rate + \nResting heart rate", 1000) ),
+  value = c( r_squared_mutation_only, r_squared_mutation_heart),check.names = FALSE
+)
+
+## Create ggplot
+p=ggplot(data=plot_df,aes(x=value, fill=`Model type`,y=..density..)) +
+        geom_histogram(alpha = 0.5,position="identity") +
+        geom_density(alpha = 0.25)+
+        labs(x='adj. R-squared values')+
+        theme(legend.position=c(0.3,0.8),
+              axis.title.x=element_text(size=15),
+              panel.background = element_rect(fill = "white"),
+              axis.line.y.left =  element_line(color = "black"),
+              axis.line.x.bottom = element_line(color = "black"),
+              plot.title = element_text(size = 13, face = "bold",hjust = 0.5)) +
+        ggtitle('Adj. R-squared values of two models \npredicting lifespan (1000 resamples)') 
+ggsave('life_expectancy_figs/Supplementary Figure 16.png',plot=p,width = 2*2.1, height = 2*1.5,dpi=600)
+print(p)
+
+```
+
+### Supplementary Figure 17
+### Plot the results of partial correlation bootsrapping analysis
+
+```{r fig.width=3.7, fig.height=2.2}
+bootstrapped_results=readRDS("bootstrapped_partial_corr_results.rds")
+
+# function to extract legend from plot
+get_only_legend <- function(plot) {
+  plot_table <- ggplot_gtable(ggplot_build(plot))
+  legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box")
+  legend <- plot_table$grobs[[legend_plot]]
+  return(legend)
+}
+
+
+## Variables to compare in partial correlation analysis
+vars_to_compare=c('log_resting_heart_rate','log_mass_specific_BMR')
+my_cols=qualitative_hcl(length((vars_to_compare)),palette = "Pastel 1") 
+
+## List to save the plots
+plot_list=list()
+
+for (log_transform_p in (c(TRUE))){
+
+  for (i in seq_along(result_names_list)){
+    correlation_result_metric=result_names_list[i]
+
+    plot_df=data.frame()
+    
+    ## Set significance level to draw in the plot as a vertical line
+    if (grepl('adj', correlation_result_metric,fixed=TRUE)){
+       sign_level=0.2
+    } else {sign_level=0.05}
+    
+
+    ## Create dataframe out of the bootstrapped results of the variables considered for the plot
+    for (var in vars_to_compare){
+        plot_df=rbind(plot_df,unlist(bootstrapped_results[[var]][[correlation_result_metric]]))}
+      
+    ## Rename colnames and omit NAN values  
+    plot_df=t(plot_df)
+    colnames(plot_df)=vars_to_compare
+    rownames(plot_df)=NULL
+    plot_df=na.omit(plot_df)
+    
+
+    ## Melt plot_df to make coloring of the two distributions easier in ggplot
+    melted_df=melt(plot_df)
+    colnames(melted_df)=c('Bootstrap_number','variable','value')
+    
+    ## Calculate the -log10 transforms of p-vales and significance levels
+    if (log_transform_p==TRUE){
+        melted_df$log_value=-log10(melted_df$value)
+        x_label = substitute(log[10] * "(p-value)", list(log = paste0(gsub('p-value','',correlation_result_metric),'-log')))
+        sign_level=-log10(sign_level)
+        col_to_plot='log_value'
+    } else {x_label=correlation_result_metric}
+            #col_to_plot='value'}
+    
+    ## Create ggplot
+    p=ggplot(data=melted_df,aes(x = log_value, fill = variable,y=..density..)) +
+            geom_histogram(alpha = 0.5,position="identity") +
+            geom_density(alpha = 0.25)+
+            labs(x=(x_label))+
+            theme(legend.position="none",
+                  axis.title.x=element_text(size=15),
+                  panel.background = element_rect(fill = "white"),
+                  axis.line.y.left =  element_line(color = "black"),
+                  axis.line.x.bottom = element_line(color = "black"))+
+            geom_vline(xintercept = sign_level,  color="red", 
+                       linetype="dashed", size=1) 
+
+    
+    ## Clean up names of variables 
+    legend_labels=gsub('_',' ',vars_to_compare)
+    legend_labels=gsub('log','',legend_labels)
+    legend_labels=tools::toTitleCase(tolower(legend_labels))
+    legend_labels=gsub('Mass Specific Bmr','Mass-Specific BMR',legend_labels)
+    
+    ## Create a plot only to extract the legend from it that willbe shown on the plot_grid object at the end
+    plot_for_legend=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
+            geom_histogram(alpha = 0.7,position="identity") +
+            geom_density(alpha = 0.25)+
+            theme(legend.background = element_rect(fill = NA))+
+            scale_fill_manual(name='Trait',labels = legend_labels, values=my_cols)+
+            theme(legend.text = element_text(size=12),
+                  legend.title = element_text(size=14))+
+            ggtitle(correlation_result_metric)
+    
+    ## Save created plots and legends in a list
+    plot_list[correlation_result_metric]=list(p)
+    combined_legend=get_only_legend(plot_for_legend)
+  }
+  
+  ## Add the 2 ggplots objects to a plot_grid object + add legend in the second step
+  p2=plot_grid(plotlist = plot_list[c('Pearson p-value')],ncol = 1) #
+  p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(0.8, 0.3),scale=1.1)
+  
+  ## Create title for the final plot
+  subplot_title <- ggdraw() + draw_label(paste0('Significance levels of partial correlation with lifespan \nafter correcting for somatic mutation rate (',num_samples,' resamples)'),y=0.7,size = 14,fontface='bold') 
+
+        
+  ## Add title to plot
+  plots_with_legend_title=plot_grid(subplot_title, p2_with_legend, ncol=1, rel_heights=c(0.2, 0.95),scale = 0.95)
+  ## Save figure as pdf
+  ggsave2(filename=paste0('life_expectancy_figs/','Supplementary Figure 17','.pdf'),plot=plots_with_legend_title,limitsize = FALSE)
+  ggsave2(filename=paste0('life_expectancy_figs/','Supplementary Figure 17','.png'),plot=plots_with_legend_title,bg='white',
+          limitsize = FALSE,dpi=600)
+  print(plots_with_legend_title)
+}  
+```
 
 
 
