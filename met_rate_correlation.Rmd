@@ -380,7 +380,7 @@ pgls_fit_package='caper'
 
 for (n in  3:length(names(life_traits_list))){ 
   cols=life_traits_list[[names(life_traits_list)[n]]]
-    for (y_val in c('log_lifespan','log_mass_specific_BMR')){ #'log_SBSC_rate','log_SBS1_rate','log_SBSB_rate'
+    for (y_val in c('log_lifespan','log_mutation_rate','log_mass_specific_BMR')){ #'log_SBSC_rate','log_SBS1_rate','log_SBSB_rate'
       
       lambda_estimate_df=data.frame()
       for (x_val in cols[!grepl(y_val,cols)]){
@@ -404,7 +404,8 @@ for (n in  3:length(names(life_traits_list))){
           
           ## Plot maximum likelihood curves of lambda values
           lambda <- seq(0, 1, length.out = 50)
-          lik <- sapply(lambda, function(lambda) logLik(gls(form,correlation = corPagel(value = lambda, phy = tree, fixed = T,form=~species_name),
+          lik <- sapply(lambda, function(lambda) logLik(gls(form,correlation = corPagel(value = lambda, phy = tree, 
+                                                                                        fixed = T,form=~species_name),
           data = d,control=glsControl(opt="optim"))))
           plot(lik ~ lambda, type = "l", main = (paste("Likelihood Plot for ",x_val)), ylab = "Log Likelihood", xlab = expression(lambda))
           abline(v = lambda_estimate$modelStruct, col = "red")
@@ -846,7 +847,8 @@ for (n in 1:length(figure_names)){
       ## Create title to subplot
       title_string=tools::toTitleCase(tolower(gsub('_',' ',format(fo))))
       title_string=gsub('Mass Specific Bmr','Mass-Specific BMR',title_string)
-      subplot_title <- ggdraw() + draw_text(subplot_letter, x=0.05,y=0.5,size = 65,fontface='bold') + draw_label(title_string, size = 35,fontface='bold') 
+      subplot_title <- ggdraw() + draw_text(subplot_letter, x=0.05,y=0.5,size = 65,fontface='bold') + 
+                       draw_label(title_string, size = 35,fontface='bold') 
       
       ## Add title to subplot
       plots_with_legend_title=plot_grid(subplot_title, plots_with_legend, ncol=1, rel_heights=c(0.06, 1),scale = 0.95)
@@ -889,8 +891,9 @@ for (n in 1:length(figure_names)){
 ```{r fig.width=4, fig.height=4}
 
 ### Names of the variables we want to include in the analysis
-partial_corr_colnames=c('log_lifespan','log_mutation_rate','log_respiratory_rate','log_heart_rate','log_adult_mass','log_time_to_sexual_maturity_female',
-                        'log_time_to_sexual_maturity_male','litter_size','mass_specific_BMR')#'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
+partial_corr_colnames=c('log_lifespan','log_mutation_rate','log_respiratory_rate','log_heart_rate','log_adult_mass',
+                        'log_time_to_sexual_maturity_female','log_time_to_sexual_maturity_male','litter_size','log_mass_specific_BMR')
+                        #'log_mass_specific_BMR')#,'log_basal_metabolic_rate')
 
 #partial_corr_colnames=c('lifespan','mutation_rate','respiratory_rate','heart_rate','adult_mass','time_to_sexual_maturity_female',
 #                        'time_to_sexual_maturity_male','litter_size','mass_specific_BMR')
@@ -1240,7 +1243,7 @@ table(bootstrapped_samples[[2]]['common_name'])
 
 
 ### Plot the results of partial correlation bootsrapping analysis
-```{r fig.width=6, fig.height=2.5}
+```{r fig.width=3.7, fig.height=2.2}
 bootstrapped_results=readRDS("bootstrapped_partial_corr_results.rds")
 
 # function to extract legend from plot
@@ -1255,13 +1258,17 @@ get_only_legend <- function(plot) {
 vars_to_compare=c('log_heart_rate','log_mass_specific_BMR')
 #vars_to_compare=vars_to_loop_through[which(vars_to_loop_through!='log_mutation_rate')]
 my_cols=qualitative_hcl(length((vars_to_compare)),palette = "Pastel 1") 
-
+subplot_letters=c('a','b')
 
 plot_list=list()
 #wilcox_p_list=list()
 
-for (log_transform_p in c(FALSE,TRUE)){
-  for (correlation_result_metric in result_names_list){
+for (log_transform_p in (c(TRUE))){
+
+  
+  for (i in seq_along(result_names_list)){
+    correlation_result_metric=result_names_list[i]
+    subplot_letter=subplot_letters[i]
     plot_df=data.frame()
     
     ## Set significance lvel to draw in the plot as a vertical line
@@ -1291,7 +1298,9 @@ for (log_transform_p in c(FALSE,TRUE)){
     ## Calculate the -log10 transforms of p-vales and significance levels
     if (log_transform_p==TRUE){
         melted_df$value=-log10(melted_df$value)
-        x_label=gsub('p-value','-log10(p-value)',correlation_result_metric)
+        #x_label=gsub('p-value',paste0('-',expression(log[10]),'(p-value)'),correlation_result_metric)
+        
+        x_label = substitute(log[10] * "(p-value)", list(log = paste0(gsub('p-value','',correlation_result_metric),'-log')))
         sign_level=-log10(sign_level)
     } else {x_label=correlation_result_metric}
     
@@ -1299,24 +1308,26 @@ for (log_transform_p in c(FALSE,TRUE)){
     p=ggplot(data=melted_df,aes(x = value, fill = variable,y=..density..)) +
             geom_histogram(alpha = 0.5,position="identity") +
             geom_density(alpha = 0.25)+
-            labs(x=x_label)+
+            labs(x=(x_label))+
             theme(legend.position="none",
                   axis.title.x=element_text(size=15),
                   panel.background = element_rect(fill = "white"),
                   axis.line.y.left =  element_line(color = "black"),
                   axis.line.x.bottom = element_line(color = "black"))+
             geom_vline(xintercept = sign_level,  color="red", 
-                       linetype="dashed", size=1)
+                       linetype="dashed", size=1) #+  
+            # annotate("text", x = sign_level, y = 0.9, label = 'a', 
+            #         hjust = 0, vjust = 1, size = 10, fontface = "bold")
      
-     #  # Calculate x and y range of the plot for showing Wilcoxon p-value
+     # #  # Calculate x and y range of the plot for showing Wilcoxon p-value
      #  plot_range <- ggplot_build(p)$layout$panel_params[[1]]$y.range
      #  x_range <- ggplot_build(p)$layout$panel_params[[1]]$x.range
      # 
      # #  Define x and y coordinates for the text label
      #  x_coord <- x_range[1] + 0.7 * diff(x_range)
      #  y_coord <- plot_range[1] + 0.7 * diff(plot_range)
-     #  p=p + annotate('text',x = x_coord, y = y_coord,label=paste('Wilcoxon p-value\n',wilcox_p_val))
-  
+     #  p=p + annotate('text',x = x_coord, y = y_coord,label=paste('a'))
+     # 
     
     ## Clean up names of variables 
     legend_labels=gsub('_',' ',vars_to_compare)
@@ -1331,8 +1342,8 @@ for (log_transform_p in c(FALSE,TRUE)){
             geom_density(alpha = 0.25)+
             theme(legend.background = element_rect(fill = NA))+
             scale_fill_manual(name='Trait',labels = legend_labels, values=my_cols)+
-            theme(legend.text = element_text(size=15),
-                  legend.title = element_text(size=17))+
+            theme(legend.text = element_text(size=12),
+                  legend.title = element_text(size=14))+
             ggtitle(correlation_result_metric)
     
     ## Save created plots and legends in a list
@@ -1342,15 +1353,20 @@ for (log_transform_p in c(FALSE,TRUE)){
   }
   
   ## Add the 2 ggplots objects to a plot_grid object + add legend in the second step
-  p2=plot_grid(plotlist = plot_list[c('Pearson p-value','adj. Pearson p-value')],ncol = 2)
-  p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(1, 0.25))
+  p2=plot_grid(plotlist = plot_list[c('Pearson p-value')],ncol = 1) #
+  p2_with_legend=plot_grid(p2,combined_legend,ncol = 2,rel_widths = c(0.8, 0.3),scale=1.1)
   
   ## Create title for the final plot
-  subplot_title <- ggdraw() + draw_label(paste0('Significance levels of partial correlation with lifespan after \ncorrecting for somatic mutation rate (',num_samples,' resamples)'),size = 20,fontface='bold') #
-                   #draw_text(subplot_letter, x=0.05,y=0.5,size = 15,fontface='bold') 
+  subplot_title <- ggdraw() + draw_label(paste0('Significance levels of partial correlation with lifespan \nafter correcting for somatic mutation rate (',num_samples,' resamples)'),y=0.7,size = 14,fontface='bold') #+ 
+                   #draw_text('a', x=0.03,y=0.0,size = 15,fontface='bold') +
+                   #draw_text('b', x=0.43,y=0.0,size = 15,fontface='bold')
         
   ## Add title to plot
-  plots_with_legend_title=plot_grid(subplot_title, p2_with_legend, ncol=1, rel_heights=c(0.07, 0.49),scale = 1)
+  plots_with_legend_title=plot_grid(subplot_title, p2_with_legend, ncol=1, rel_heights=c(0.2, 0.95),scale = 0.95)
+  ## Save figure as pdf
+  ggsave2(filename=paste0('life_expectancy_figs/','Supplementary Figure 17','.pdf'),plot=plots_with_legend_title,limitsize = FALSE)
+  ggsave2(filename=paste0('life_expectancy_figs/','Supplementary Figure 17','.png'),plot=plots_with_legend_title,bg='white',
+          limitsize = FALSE,dpi=600)
   print(plots_with_legend_title)
 }  
 
@@ -1358,7 +1374,7 @@ for (log_transform_p in c(FALSE,TRUE)){
 ```
 
 ### Plot the results of linear regression-R^2 bootsrapping analysis
-```{r fig.width=2.5, fig.height=2.5}
+```{r fig.width=2.5, fig.height=1.8}
 r_squared_mutation_heart=readRDS("bootstrapped_r_squared_mutation_heart.rds")
 r_squared_mutation_only=readRDS("bootstrapped_r_squared_mutation_only.rds")
 
@@ -1379,7 +1395,7 @@ p=ggplot(data=plot_df,aes(x=value, fill=`Model type`,y=..density..)) +
               axis.line.x.bottom = element_line(color = "black"),
               plot.title = element_text(size = 13, face = "bold",hjust = 0.5)) +
         ggtitle('Adj. R-squared values of two models \npredicting lifespan (1000 resamples)') 
-
+ggsave('life_expectancy_figs/Supplementary Figure 16.png',plot=p,width = 2*2.1, height = 2*1.5,dpi=600)
 print(p)
 ```
 
