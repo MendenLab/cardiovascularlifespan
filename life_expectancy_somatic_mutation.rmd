@@ -560,9 +560,9 @@ for (n in 1:length(models)){
 
 
 #### 1. Create bootstrapped dataset from original dataset
-#### 2. Calculate adjusted R^2 values for the bootstrapped datasets and save them
-###  3. Calculate Pearson and Spearman correlations
-Partial correlation analysis with bootstrap to compare Pearson's R's P-value distributions between traits
+#### 2. Calculate adjusted R^2 values for the bootstrapped datasets 
+###  3. Calculate Pearson correlations for the boostrapped datasetto ompare Pearson's R's P-value distributions between traits
+
 ```{r}
 ### Names of the variables we want to include in the analysis
 partial_corr_colnames=c('log_lifespan','log_somatic_mutation_rate','log_respiratory_rate','log_resting_heart_rate','log_adult_mass',
