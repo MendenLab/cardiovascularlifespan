@@ -11,11 +11,26 @@ library(scatterplot3d)
 library(cowplot)
 library(writexl)
 
-raw_data <- read_excel("/Users/martin.meinel/Documents/Matters Arising/data.xlsx")
+## Load supplementary table 1
+raw_data=read_excel("./Supplementary Table 1.xlsx",sheet="1j - Data for analysis")
+
+## Set species name as rowname for phylogenetic analysis later
+raw_data=as.data.frame(raw_data)
+rownames(raw_data)=gsub(' ','_',raw_data$`Species name`)
+raw_data <- raw_data %>% rename(common_name = `Common name`,
+                                lifespan = Lifespan,
+                                mutation_rate = `Somatic mutation rate`,
+                                respiratory_rate = `Respiratory rate`,
+                                heart_rate = `Resting heart rate`,
+                                adult_mass = `Adult mass`,
+                                time_to_sexual_maturity_female = `Female sexual maturity`,
+                                time_to_sexual_maturity_male = `Male sexual maturity`,
+                                litter_size = `Litter size`,
+                                mass_specific_BMR = `Mass specific BMR`)
+
 ### Analysis of metabolic rate with lifespan ###############################
 corr_life_meta <- cor.test(log10(raw_data$lifespan),log10(raw_data$mass_specific_BMR),method="pearson")
 corr_meta_spearman <- cor.test(log10(raw_data$lifespan),log10(raw_data$mass_specific_BMR),method="spearman")
-
 
 lm_meta <- lm(log10(lifespan)~log10(mass_specific_BMR), data = raw_data)
 summary(lm_meta)
@@ -227,12 +242,6 @@ Female_Sex_plot<- raw_data %>% ggplot2::ggplot(aes(x = log10(raw_data$time_to_se
                                                 "\n Pearson: R =",  round(corr_life_female$estimate, 2), ", p-value =",  round(corr_life_female$p.value, 4)),size=3.)
 
 print(Female_Sex_plot)
-############## Create Grid plot for all traits ############
-# Add Nulls in between plots and line of null plots
-plot_grid(mut_rate_Plot,  NULL, Metabolic_Rate_Plot, 
-          Litter_Size_Plot, NULL, Mass_Plot, 
-          Heart_Plot, NULL, Female_Sex_plot, 
-          lung_plot, NULL, Male_Sex_Plot, ncol=3, rel_widths = c(0.95,0.05,0.95), scale = 0.95)
 
 ### Correlation Analysis ###########################
 
@@ -421,4 +430,4 @@ model_results <- data.frame(linear_models, Adj_R_squared, AIC, BIC)
 model_results <- model_results %>% rename("Adjusted R-squared" = "Adj_R_squared", "Phenotypic traits included in model" = "linear_models")
 
 ## Create supplements table with all the previously computed information
-write_xlsx(x=list("3a - Correlation analysis" = correlations, "3b - Partial correlation analysis" =  partial_correlations,"3c - Linear model fits" = model_results), "/Users/martin.meinel/Documents/Matters Arising/supplements_May.xlsx")
+write_xlsx(x=list("4a - Correlation analysis" = correlations, "4b - Partial correlation analysis" =  partial_correlations,"4c - Linear model fits" = model_results), "./Supplementary Table 4.xlsx")
