@@ -20,7 +20,6 @@ library(ade4)
 library("dplyr")
 library(caper)
 library(nlme)
-library('googlesheets4')
 library(gridExtra)
 library('phytools')
 library(colorspace)
@@ -32,9 +31,7 @@ library(ggtree)
 library(cowplot)
 library(colorspace)
 library("ggplotify")
-library(ggheatmap)
 library('ComplexHeatmap')
-library(pheatmap)
 
 ```
 
