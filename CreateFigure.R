@@ -4,11 +4,8 @@ library(tidyverse)
 library(ggrepel)
 library(reshape2)
 library(broom)
-library(car)
 library(ppcor)
-library(rockchalk)
 library(scatterplot3d)
-library(cowplot)
 library(writexl)
 
 ## Load supplementary table 1
